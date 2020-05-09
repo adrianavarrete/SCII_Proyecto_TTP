@@ -81,12 +81,23 @@ async function inicioProceso() {
     const secret_d = Buffer.from(DPrK_d)
     const secret_n = Buffer.from(DPrK_n)
 
-    const share_d = sss.split(secret_d, {shares: 4, threshold: 2});
-    const share_n = sss.split(secret_n, {shares: 4, threshold: 2});
+    const share_d = sss.split(secret_d, { shares: 4, threshold: 2 });
+    const share_n = sss.split(secret_n, { shares: 4, threshold: 2 });
 
-    var concejal1 = bigconv.bufToHex(share_d[0]);
+    //Falta encriptar con la clave recibida por el Alcalde
 
-    console.log(concejal1)
+    var concejal1_d = encrypt(bigconv.bufToHex(share_d[0]));
+    var concejal2_d = encrypt(bigconv.bufToHex(share_d[1]));
+    var concejal3_d = encrypt(bigconv.bufToHex(share_d[2]));
+    var concejal4_d = encrypt(bigconv.bufToHex(share_d[3]));
+
+    var concejal1_n = encrypt(bigconv.bufToHex(share_n[0]));
+    var concejal2_n = encrypt(bigconv.bufToHex(share_n[1]));
+    var concejal3_n = encrypt(bigconv.bufToHex(share_n[2]));
+    var concejal4_n = encrypt(bigconv.bufToHex(share_n[3]));
+
+    console.log(concejal1_d)
+    
 
 }
 
@@ -107,6 +118,17 @@ async function digestHash(body) {
     return d;
 }
 
+function encrypt(text) {
+    const algorithm = 'aes-256-cbc';
+    const key = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(16);
+
+    let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
+    let encrypted = cipher.update(text);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return { iv: iv.toString('hex'), encryptedData: encrypted.toString('hex') };
+}
+
 
 
 
@@ -125,7 +147,7 @@ app.use(cors());
 // routes
 
 // starting the server
-app.listen(app.get('port'),() => {
+app.listen(app.get('port'), () => {
     claveRSA()
     inicioProceso()
     console.log(`Server on port ${app.get('port')}`);
