@@ -14,10 +14,12 @@
     "bigint-crypto-utils": "^3.0.5",
     "cors": "^2.8.5",
     "express": "^4.17.1",
+    "hashmap": "^2.4.0",
     "morgan": "^1.10.0",
     "nodemon": "^2.0.3",
     "object-sha": "^2.0.5",
     "rsa-scii-upc": "^1.0.0",
-    "shamirs-secret-sharing": "^1.0.1"
+    "shamirs-secret-sharing": "^1.0.1",
+    "socket.io": "^2.3.0"
   }
 }

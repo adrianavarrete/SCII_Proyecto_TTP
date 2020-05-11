@@ -1,4 +1,5 @@
 const express = require('express');
+const SocketIO = require('socket.io');
 const app = express();
 const morgan = require('morgan');
 const cors = require('cors');
@@ -9,10 +10,13 @@ const crypto = require('crypto');
 const rsa = require('rsa-scii-upc');
 const sss = require('shamirs-secret-sharing')
 const ___dirname = path.resolve();
+const HashMap = require('hashmap');
 
 global.TTP_PublicKey
 global.TTP_PrivateKey
 global.claveK
+
+var usuarios = new HashMap();
 
 
 async function claveRSA() {
@@ -34,40 +38,6 @@ async function inicioProceso() {
     console.log(DecretoPrivateKey);
 
 }
-
-
-app.post("/type1", async (req, res) => {
-
-    alcadePublicKey = new rsa.PublicKey(bigconv.hexToBigint(req.body.mensaje.e), bigconv.hexToBigint(req.body.mensaje.n));
-
-    // FALTA LA RECEPCIÓN DE LA CLAVE K A FALTA DE QUE SE GENERE EL CÓDIGO EN EL CLIENTE
-
-    if (await verifyHash(alcadePublicKey, req.body.mensaje.body, req.body.mensaje.body) == true) {
-
-        var ts = new Date();
-
-        const body = {
-            type: '2',
-            src: 'Alcalde',
-            dst: 'Cn',
-            ttp: 'TTP',
-            ts: ts.getHours(),
-        }
-
-        const digest = await digestHash(body);
-
-        const pkp = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest)));
-
-        res.status(200).send({
-            body, pkp
-        });
-
-    } else {
-        res.status(400).send("No se ha podido verificar al Alcalde");
-    }
-
-});
-
 
 async function inicioProceso() {
 
@@ -135,7 +105,7 @@ function encrypt(text) {
 //########################## CONFIF SERVIDOR ############################################
 
 // settings
-app.set('port', process.env.PORT || 8000);
+app.set('port', process.env.PORT || 9000);
 app.set('json spaces', 2);
 
 // middleware
@@ -147,10 +117,90 @@ app.use(cors());
 // routes
 
 // starting the server
-app.listen(app.get('port'), () => {
+const server = app.listen(app.get('port'), () => {
     claveRSA()
     inicioProceso()
     console.log(`Server on port ${app.get('port')}`);
+
+});
+
+const io = SocketIO(server);
+
+io.on('connection', (socket) => {
+
+    socket.on('usuario', (msg) => {
+        console.log('Se ha conectado ' + msg);
+    
+        if(msg == "Alcalde"){
+    
+          userSocket = msg;
+          usuarios.set(msg, socket.id);
+    
+          socket.broadcast.emit('AlcaldeID', usuarios.get("Alcalde"));
+    
+    
+        }else{
+    
+          userSocket = msg;
+          usuarios.set(msg, socket.id);
+    
+          
+          if(usuarios.get("Alcalde") != null){
+            socket.emit('AlcaldeID', usuarios.get("Alcalde"));
+          }
+        }
+    
+      });
+
+      socket.on('alcalde-to-ttp-type1', (mensaje) => {
+
+        alcadePublicKey = new rsa.PublicKey(bigconv.hexToBigint(mensaje.e), bigconv.hexToBigint(mensaje.n));
+
+        // FALTA LA RECEPCIÓN DE LA CLAVE K A FALTA DE QUE SE GENERE EL CÓDIGO EN EL CLIENTE
+    
+        if (await verifyHash(alcadePublicKey, req.body.mensaje.body, req.body.mensaje.body) == true) {
+    
+            var ts = new Date();
+    
+            const body = {
+                type: '2',
+                src: 'Alcalde',
+                dst: 'Cn',
+                ttp: 'TTP',
+                ts: ts.toUTCString()
+            }
+    
+            const digest = await digestHash(body);
+    
+            const pkp = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest)));
+
+            socket.emit('ttp-to-alcalde-type2', {
+                body, pkp
+            });
+
+            // recorrer un bucle para ver todos los concejales y sus sockets ID
+
+            socket.broadcast.to(usuarios.get("Alcalde")).emit('mensaje-to-alcalde', mensaje)
+
+
+
+    
+    
+        } else {
+            socket.emit('ttp-to-alcalde-type2', "Not verified");
+        }
+
+
+
+      })
+
+      socket.on('disconnect', () => {
+   
+        console.log("el usuario " + userSocket + " se ha desconectado ")
+        usuarios.delete(userSocket);
+      });
+    
+
 
 });
 
