@@ -1,4 +1,5 @@
 const express = require('express');
+const SocketIO = require('socket.io');
 const app = express();
 const morgan = require('morgan');
 const cors = require('cors');
@@ -9,10 +10,115 @@ const crypto = require('crypto');
 const rsa = require('rsa-scii-upc');
 const sss = require('shamirs-secret-sharing')
 const ___dirname = path.resolve();
+const HashMap = require('hashmap');
 
 global.TTP_PublicKey
 global.TTP_PrivateKey
 global.claveK
+
+var usuarios = new HashMap();
+
+
+//########################## CONFIF SERVIDOR ############################################
+
+// settings
+app.set('port', process.env.PORT || 9000);
+app.set('json spaces', 2);
+
+// middleware
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cors());
+
+// routes
+
+// starting the server
+const server = app.listen(app.get('port'), () => {
+    claveRSA()
+    console.log(`Server on port ${app.get('port')}`);
+
+});
+
+const io = SocketIO(server);
+
+io.on('connection', (socket) => {
+
+    var userSocket;
+
+    socket.on('usuario', (msg) => {
+        console.log('Se ha conectado ' + msg);
+
+        usuarios.set(msg, socket.id);
+        userSocket = msg
+
+
+    });
+
+    socket.on('alcalde-to-ttp-type1', (mensaje) => {
+
+        console.log(mensaje)
+
+        //llamar a la función para procesar el paquete de entrada y generar el type2
+
+        socket.emit('ttp-to-alcalde-type2', 'type2')
+
+        //llamar a la funcion que genera shamir
+
+        mConcejal1 = {
+            e: "e_1",
+            d: "d_1"
+        }
+        mConcejal2 = {
+            e: "e_2",
+            d: "d_2"
+        }
+        mConcejal3 = {
+            e: "e_3",
+            d: "d_3"
+        }
+        mConcejal4 = {
+            e: "e_4",
+            d: "d_4"
+        }
+
+
+        usuarios.forEach((k, v) => {
+            console.log(k)
+            if (v != "alcalde") {
+                switch (v) {
+                    case "concejal1":
+                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal1);
+                        break;
+                    case "concejal2":
+                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal2);
+                        console.log("HOLA")
+                        break;
+                    case "concejal3":
+                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal3);
+                        break;
+                    case "concejal4":
+                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal4);
+                        break;
+                }
+
+            }
+
+
+        })
+
+
+    })
+
+    socket.on('disconnect', () => {
+
+        console.log("el usuario " + userSocket + " se ha desconectado ")
+        usuarios.delete(userSocket);
+    });
+
+
+
+});
 
 
 async function claveRSA() {
@@ -24,50 +130,6 @@ async function claveRSA() {
 
 
 }
-
-async function inicioProceso() {
-
-    const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
-
-    var DecretoPrivateKey = privateKey;
-
-    console.log(DecretoPrivateKey);
-
-}
-
-
-app.post("/type1", async (req, res) => {
-
-    alcadePublicKey = new rsa.PublicKey(bigconv.hexToBigint(req.body.mensaje.e), bigconv.hexToBigint(req.body.mensaje.n));
-
-    // FALTA LA RECEPCIÓN DE LA CLAVE K A FALTA DE QUE SE GENERE EL CÓDIGO EN EL CLIENTE
-
-    if (await verifyHash(alcadePublicKey, req.body.mensaje.body, req.body.mensaje.body) == true) {
-
-        var ts = new Date();
-
-        const body = {
-            type: '2',
-            src: 'Alcalde',
-            dst: 'Cn',
-            ttp: 'TTP',
-            ts: ts.getHours(),
-        }
-
-        const digest = await digestHash(body);
-
-        const pkp = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest)));
-
-        res.status(200).send({
-            body, pkp
-        });
-
-    } else {
-        res.status(400).send("No se ha podido verificar al Alcalde");
-    }
-
-});
-
 
 async function inicioProceso() {
 
@@ -97,9 +159,10 @@ async function inicioProceso() {
     var concejal4_n = encrypt(bigconv.bufToHex(share_n[3]));
 
     console.log(concejal1_d)
-    
 
 }
+
+
 
 
 
@@ -132,26 +195,51 @@ function encrypt(text) {
 
 
 
-//########################## CONFIF SERVIDOR ############################################
 
-// settings
-app.set('port', process.env.PORT || 8000);
-app.set('json spaces', 2);
 
-// middleware
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cors());
 
-// routes
+async function alcaldeToTTPType1() {
 
-// starting the server
-app.listen(app.get('port'), () => {
-    claveRSA()
-    inicioProceso()
-    console.log(`Server on port ${app.get('port')}`);
+    alcadePublicKey = new rsa.PublicKey(bigconv.hexToBigint(mensaje.e), bigconv.hexToBigint(mensaje.n));
 
-});
+    // FALTA LA RECEPCIÓN DE LA CLAVE K A FALTA DE QUE SE GENERE EL CÓDIGO EN EL CLIENTE
+
+    if (await verifyHash(alcadePublicKey, req.body.mensaje.body, req.body.mensaje.body) == true) {
+
+        var ts = new Date();
+
+        const body = {
+            type: '2',
+            src: 'Alcalde',
+            dst: 'Cn',
+            ttp: 'TTP',
+            ts: ts.toUTCString()
+        }
+
+        const digest = await digestHash(body);
+
+        const pkp = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest)));
+
+        socket.emit('ttp-to-alcalde-type2', {
+            body, pkp
+        });
+
+        // recorrer un bucle para ver todos los concejales y sus sockets ID
+
+        socket.broadcast.to(usuarios.get("Alcalde")).emit('mensaje-to-alcalde', mensaje)
+
+
+
+
+
+    } else {
+        socket.emit('ttp-to-alcalde-type2', "Not verified");
+    }
+
+
+
+
+}
+
 
 //########################################################################################
