@@ -35,7 +35,6 @@ app.use(cors());
 
 // starting the server
 const server = app.listen(app.get('port'), () => {
-    claveRSA()
     console.log(`Server on port ${app.get('port')}`);
 
 });
@@ -55,9 +54,10 @@ io.on('connection', (socket) => {
 
     });
 
-    socket.on('alcalde-to-ttp-type1', (mensaje) => {
+    socket.on('alcalde-to-ttp-type1', async(mensaje) => {
 
         console.log(mensaje)
+        var clavesShamir = await inicioProceso()
 
         //llamar a la función para procesar el paquete de entrada y generar el type2
 
@@ -66,21 +66,23 @@ io.on('connection', (socket) => {
         //llamar a la funcion que genera shamir
 
         mConcejal1 = {
-            e: "e_1",
-            d: "d_1"
+            d: clavesShamir[0],
+            n: clavesShamir[1]
         }
         mConcejal2 = {
-            e: "e_2",
-            d: "d_2"
+            d: clavesShamir[2],
+            n: clavesShamir[3]
         }
         mConcejal3 = {
-            e: "e_3",
-            d: "d_3"
+            d: clavesShamir[4],
+            n: clavesShamir[5]
         }
         mConcejal4 = {
-            e: "e_4",
-            d: "d_4"
+            d: clavesShamir[6],
+            n: clavesShamir[7]
         }
+
+        console.log(mConcejal1)
 
 
         usuarios.forEach((k, v) => {
@@ -133,6 +135,8 @@ async function claveRSA() {
 
 async function inicioProceso() {
 
+    var result = [];
+
     const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
 
     var DecretoPrivateKey = privateKey;
@@ -148,17 +152,13 @@ async function inicioProceso() {
 
     //Falta encriptar con la clave recibida por el Alcalde
 
-    var concejal1_d = encrypt(bigconv.bufToHex(share_d[0]));
-    var concejal2_d = encrypt(bigconv.bufToHex(share_d[1]));
-    var concejal3_d = encrypt(bigconv.bufToHex(share_d[2]));
-    var concejal4_d = encrypt(bigconv.bufToHex(share_d[3]));
+    for (let i = 0; i < 4; i++) {
+        result.push(encrypt(bigconv.bufToHex(share_d[i])))
+        result.push(encrypt(bigconv.bufToHex(share_n[i])))
+        
+    }
 
-    var concejal1_n = encrypt(bigconv.bufToHex(share_n[0]));
-    var concejal2_n = encrypt(bigconv.bufToHex(share_n[1]));
-    var concejal3_n = encrypt(bigconv.bufToHex(share_n[2]));
-    var concejal4_n = encrypt(bigconv.bufToHex(share_n[3]));
-
-    console.log(concejal1_d)
+    return result;
 
 }
 
