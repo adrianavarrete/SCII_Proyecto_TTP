@@ -9,6 +9,7 @@ const sha = require('object-sha');
 const crypto = require('crypto');
 const rsa = require('rsa-scii-upc');
 const sss = require('shamirs-secret-sharing')
+const request = require('request');
 const ___dirname = path.resolve();
 const HashMap = require('hashmap');
 
@@ -54,35 +55,56 @@ io.on('connection', (socket) => {
 
     });
 
-    socket.on('alcalde-to-ttp-type1', async(mensaje) => {
+    socket.on('alcalde-to-ttp-type1', async (mensaje) => {
 
-        console.log(mensaje)
-        var clavesShamir = await inicioProceso()
+        var aytoCert = await getAytoCert()
+        var alcaldeCert = mensaje.cert
 
-        //llamar a la función para procesar el paquete de entrada y generar el type2
+        var alcaldePublicKey = await extractPubKFromCert(alcaldeCert, aytoCert)
 
-        socket.emit('ttp-to-alcalde-type2', 'type2')
+        if (alcaldePublicKey === null) {
+            console.log("No se ha podido verificar que el Ayuntamiento haya emitido el certificado correspondiente")
 
-        //llamar a la funcion que genera shamir
+        } else {
 
-        mConcejal1 = {
-            d: clavesShamir[0],
-            n: clavesShamir[1]
+
+            if (await verifyHash(alcaldePublicKey, mensaje.body, mensaje.pko) == false) {
+                console.log("No se ha podido verificar al Alcalde")
+            } else {
+
+                var clavesShamir = await inicioProceso(mensaje.body.msg)
+
+                //llamar a la función para procesar el paquete de entrada y generar el type2
+
+                socket.emit('ttp-to-alcalde-type2', 'type2')
+
+                //llamar a la funcion que genera shamir
+
+                mConcejal1 = {
+                    d: clavesShamir[0],
+                    n: clavesShamir[1]
+                }
+                mConcejal2 = {
+                    d: clavesShamir[2],
+                    n: clavesShamir[3]
+                }
+                mConcejal3 = {
+                    d: clavesShamir[4],
+                    n: clavesShamir[5]
+                }
+                mConcejal4 = {
+                    d: clavesShamir[6],
+                    n: clavesShamir[7]
+                }
+
+            }
         }
-        mConcejal2 = {
-            d: clavesShamir[2],
-            n: clavesShamir[3]
-        }
-        mConcejal3 = {
-            d: clavesShamir[4],
-            n: clavesShamir[5]
-        }
-        mConcejal4 = {
-            d: clavesShamir[6],
-            n: clavesShamir[7]
-        }
 
-        console.log(mConcejal1)
+
+
+
+
+
 
 
         usuarios.forEach((k, v) => {
@@ -133,7 +155,9 @@ async function claveRSA() {
 
 }
 
-async function inicioProceso() {
+async function inicioProceso(claveK) {
+
+    console.log(claveK)
 
     var result = [];
 
@@ -155,14 +179,26 @@ async function inicioProceso() {
     for (let i = 0; i < 4; i++) {
         result.push(encrypt(bigconv.bufToHex(share_d[i])))
         result.push(encrypt(bigconv.bufToHex(share_n[i])))
-        
+
     }
 
     return result;
 
 }
 
+async function extractPubKFromCert(cert, issuerCert) {
+    const hashBody = await sha.digest(cert.cert, 'SHA-256')
+    var issuerPublicKey = new rsa.PublicKey(bigconv.hexToBigint(issuerCert.cert.publicKey.e), bigconv.hexToBigint(issuerCert.cert.publicKey.n))
 
+    if (hashBody == bigconv.bigintToText(issuerPublicKey.verify(bigconv.hexToBigint(cert.signatureIssuer)))) {
+
+        return new rsa.PublicKey(bigconv.hexToBigint(cert.cert.publicKey.e), bigconv.hexToBigint(cert.cert.publicKey.n))
+
+    } else {
+        return null
+    }
+
+}
 
 
 
@@ -173,6 +209,7 @@ async function verifyHash(PublicKey, body, signature) {
     if (hashBody == bigconv.bigintToText(PublicKey.verify(bigconv.hexToBigint(signature)))) {
         verify = true
     }
+
     return verify
 }
 
@@ -192,11 +229,19 @@ function encrypt(text) {
     return { iv: iv.toString('hex'), encryptedData: encrypted.toString('hex') };
 }
 
+async function getAytoCert() {
+
+    return new Promise((resolve, reject) => {
+        request.get('http://localhost:3000/AytoCert', { json: true }, (err, res, body) => {
+            if (err) reject(err)
+            else {
+                resolve(res.body);
+            }
+        })
+    });
 
 
-
-
-
+}
 
 async function alcaldeToTTPType1() {
 

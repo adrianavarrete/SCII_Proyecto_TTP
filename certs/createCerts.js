@@ -26,7 +26,7 @@ async function createKeys() {
 
 }
 
-function saveTTPCert() {
+async function saveTTPCert() {
 
     var cert = {
         publicKey: {
@@ -36,7 +36,7 @@ function saveTTPCert() {
         IssuerID: "TTP",
     }
     
-    var signatureIssuer = bigconv.bigintToHex(ttp_prKey.sign(bigconv.textToBigint(digestHash(cert))));
+    var signatureIssuer = bigconv.bigintToHex(ttp_prKey.sign(bigconv.textToBigint(await digestHash(cert))));
     
     var certificate = {
         certificate: {

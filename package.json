@@ -18,6 +18,7 @@
     "morgan": "^1.10.0",
     "nodemon": "^2.0.3",
     "object-sha": "^2.0.5",
+    "request": "^2.88.2",
     "rsa-scii-upc": "^1.0.1",
     "shamirs-secret-sharing": "^1.0.1",
     "socket.io": "^2.3.0"
