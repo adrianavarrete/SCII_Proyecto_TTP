@@ -163,24 +163,48 @@ async function inicioProceso(claveK) {
 
     const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
 
+    console.log("public", publicKey)
+    console.log("private", privateKey)
+
     var DecretoPrivateKey = privateKey;
 
-    var DPrK_d = bigconv.bigintToText(DecretoPrivateKey.d)
-    var DPrK_n = bigconv.bigintToText(DecretoPrivateKey.publicKey.n)
+    console.log(DPrK_d)
+
+    var DPrK_d = bigconv.bigintToHex(DecretoPrivateKey.d)
+    console.log("hex", DPrK_d)
+    var DPrK_n = bigconv.bigintToHex(DecretoPrivateKey.publicKey.n)
+    
 
     const secret_d = Buffer.from(DPrK_d)
+    console.log("buffer", secret_d)
     const secret_n = Buffer.from(DPrK_n)
 
     const share_d = sss.split(secret_d, { shares: 4, threshold: 2 });
+    console.log(share_d)
     const share_n = sss.split(secret_n, { shares: 4, threshold: 2 });
 
     //Falta encriptar con la clave recibida por el Alcalde
+
+    // var test = bigconv.textToBuf("hola")
+
+    // console.log("bufferizado", test)
+
+    // console.log("hexadizado", bigconv.bufToHex(test))
+
+
+    // result.push(encrypt(bigconv.bufToHex(test), claveK))
+    // result.push(encrypt(bigconv.bufToHex(test), claveK))
+
+    // console.log("encriptado", result[0])
+
+        
 
     for (let i = 0; i < 4; i++) {
         result.push(encrypt(bigconv.bufToHex(share_d[i]), claveK))
         result.push(encrypt(bigconv.bufToHex(share_n[i]), claveK))
 
     }
+    console.log(bigconv.bufToHex(share_d[0]))
 
     return result;
 
