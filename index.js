@@ -62,7 +62,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('concejal-to-ttp-type4', async (mensaje) => {
-
     
         console.log(mensaje)
 
