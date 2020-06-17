@@ -12,10 +12,14 @@ const sss = require('shamirs-secret-sharing')
 const request = require('request');
 const ___dirname = path.resolve();
 const HashMap = require('hashmap');
+const fs = require('fs');
+
 
 global.TTP_PublicKey
 global.TTP_PrivateKey
 global.claveK
+global.TTPcert
+global.type4
 
 var usuarios = new HashMap();
 
@@ -38,6 +42,8 @@ app.use(cors());
 const server = app.listen(app.get('port'), () => {
     console.log(`Server on port ${app.get('port')}`);
 
+    getCertAndKeys()
+
 });
 
 const io = SocketIO(server);
@@ -52,6 +58,13 @@ io.on('connection', (socket) => {
         usuarios.set(msg, socket.id);
         userSocket = msg
 
+
+    });
+
+    socket.on('concejal-to-ttp-type4', async (mensaje) => {
+
+    
+        console.log(mensaje)
 
     });
 
@@ -71,14 +84,33 @@ io.on('connection', (socket) => {
             if (await verifyHash(alcaldePublicKey, mensaje.body, mensaje.pko) == false) {
                 console.log("No se ha podido verificar al Alcalde")
             } else {
+                var ts = new Date();
+
+                var body = {
+                    type: '2',
+                    src: 'Alcalde',
+                    TTP: 'TTP',
+                    dest: 'Concejales',
+                    ts: ts.toUTCString()
+                }
+
+
+                const digestType2 = await digestHash(body);
+                const pkp = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digestType2)));
+
+
+                const type2 = {
+                    body: body,
+                    pkp: pkp,
+                    cert: TTPcert
+                }
+
+
+                socket.emit('ttp-to-alcalde-type2', type2)
+
+
 
                 var clavesShamir = await inicioProceso(mensaje.body.msg)
-
-                //llamar a la función para procesar el paquete de entrada y generar el type2
-
-                socket.emit('ttp-to-alcalde-type2', 'type2')
-
-                //llamar a la funcion que genera shamir
 
                 mConcejal1 = {
                     d: clavesShamir[0],
@@ -97,39 +129,17 @@ io.on('connection', (socket) => {
                     n: clavesShamir[7]
                 }
 
+
+                usuarios.forEach((k, v) => {
+                    console.log(k)
+                    if (v != "alcalde") {
+                        switchType3(v, k, socket)
+                    }
+
+
+                })
             }
         }
-
-
-
-
-
-
-
-
-        usuarios.forEach((k, v) => {
-            console.log(k)
-            if (v != "alcalde") {
-                switch (v) {
-                    case "concejal1":
-                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal1);
-                        break;
-                    case "concejal2":
-                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal2);
-                        console.log("HOLA")
-                        break;
-                    case "concejal3":
-                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal3);
-                        break;
-                    case "concejal4":
-                        socket.broadcast.to(k).emit('ttp-to-concejal-type4', mConcejal4);
-                        break;
-                }
-
-            }
-
-
-        })
 
 
     })
@@ -145,15 +155,6 @@ io.on('connection', (socket) => {
 });
 
 
-async function claveRSA() {
-
-    const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
-
-    TTP_PublicKey = publicKey;
-    TTP_PrivateKey = privateKey;
-
-
-}
 
 async function inicioProceso(claveK) {
 
@@ -177,8 +178,8 @@ async function inicioProceso(claveK) {
     //Falta encriptar con la clave recibida por el Alcalde
 
     for (let i = 0; i < 4; i++) {
-        result.push(encrypt(bigconv.bufToHex(share_d[i])))
-        result.push(encrypt(bigconv.bufToHex(share_n[i])))
+        result.push(encrypt(bigconv.bufToHex(share_d[i]), claveK))
+        result.push(encrypt(bigconv.bufToHex(share_n[i]), claveK))
 
     }
 
@@ -218,10 +219,11 @@ async function digestHash(body) {
     return d;
 }
 
-function encrypt(text) {
+function encrypt(text, exportedKey) {
     const algorithm = 'aes-256-cbc';
-    const key = crypto.randomBytes(32);
+    const key = bigconv.hexToBuf(exportedKey)
     const iv = crypto.randomBytes(16);
+
 
     let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
     let encrypted = cipher.update(text);
@@ -285,6 +287,111 @@ async function alcaldeToTTPType1() {
 
 
 }
+
+function getCertAndKeys() {
+    var cert = JSON.parse(fs.readFileSync('./certs/ttpCert.json'));
+
+    TTPcert = cert.certificate
+
+    TTP_PublicKey = new rsa.PublicKey(bigconv.hexToBigint(TTPcert.cert.publicKey.e), bigconv.hexToBigint(TTPcert.cert.publicKey.n))
+    TTP_PrivateKey = new rsa.PrivateKey(bigconv.hexToBigint(cert.privateKey.d), TTP_PublicKey)
+
+
+}
+
+async function switchType3(v, k, socket) {
+    var ts = new Date();
+
+
+    switch (v) {
+        case "concejal1":
+            var body1 = {
+                type: '3',
+                src: 'Alcalde',
+                TTP: 'TTP',
+                dest: 'Concejal1',
+                msg: mConcejal1,
+                ts: ts.toUTCString()
+            }
+
+            const digest1 = await digestHash(body1);
+            const po1 = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest1)));
+
+            const bodyToEmit1 = {
+                body: body1,
+                po: po1,
+                cert: TTPcert
+            }
+            socket.broadcast.to(k).emit('ttp-to-concejal-type3', bodyToEmit1);
+            console.log("Deberia de haber enviado algo")
+            break;
+
+        case "concejal2":
+            var body2 = {
+                type: '3',
+                src: 'Alcalde',
+                TTP: 'TTP',
+                dest: 'Concejal2',
+                msg: mConcejal2,
+                ts: ts.toUTCString()
+            }
+
+            const digest2 = await digestHash(body2);
+            const po2 = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest2)));
+
+            const bodyToEmit2 = {
+                body: body2,
+                po: po2,
+                cert: TTPcert
+            }
+            socket.broadcast.to(k).emit('ttp-to-concejal-type3', bodyToEmit2);
+            break;
+
+        case "concejal3":
+            var body3 = {
+                type: '3',
+                src: 'Alcalde',
+                TTP: 'TTP',
+                dest: 'Concejal3',
+                msg: mConcejal3,
+                ts: ts.toUTCString()
+            }
+
+            const digest3 = await digestHash(body3);
+            const po3 = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest3)));
+
+            const bodyToEmit3 = {
+                body: body3,
+                po: po3,
+                cert: TTPcert
+            }
+            socket.broadcast.to(k).emit('ttp-to-concejal-type3', bodyToEmit3);
+            break;
+
+        case "concejal4":
+            var body4 = {
+                type: '3',
+                src: 'Alcalde',
+                TTP: 'TTP',
+                dest: 'Concejal4',
+                msg: mConcejal4,
+                ts: ts.toUTCString()
+            }
+
+            const digest4 = await digestHash(body4);
+            const po4 = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digest4)));
+
+            const bodyToEmit4 = {
+                body: body4,
+                po: po4,
+                cert: TTPcert
+            }
+            socket.broadcast.to(k).emit('ttp-to-concejal-type3', bodyToEmit4);
+            break;
+    }
+}
+
+
 
 
 //########################################################################################
