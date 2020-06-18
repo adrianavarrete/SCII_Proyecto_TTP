@@ -62,7 +62,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('concejal-to-ttp-type4', async (mensaje) => {
-    
+
         console.log(mensaje)
 
     });
@@ -85,13 +85,83 @@ io.on('connection', (socket) => {
             } else {
                 var ts = new Date();
 
+                const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
+
+
+
+
+
+                var bodyDecreto = {
+                    orden: mensaje.body.msg.orden,
+                    solicitado: alcaldeCert.cert.ID,
+                    decreto_publickey: {
+                        e: bigconv.bigintToHex(publicKey.e),
+                        n: bigconv.bigintToHex(publicKey.n)
+                    }
+                }
+
+
+
+                const digestDecreto = await digestHash(bodyDecreto);
+                const ttpSignatureDecreto = bigconv.bigintToHex(TTP_PrivateKey.sign(bigconv.textToBigint(digestDecreto)));
+
+                var decreto = {
+                    Decreto: bodyDecreto,
+                    Verificacion_TTP: ttpSignatureDecreto
+                }
+
+                const crypto = require('crypto');
+
+                const key = crypto.randomBytes(32)
+                const iv = crypto.randomBytes(16)
+
+                console.log(bigconv.bufToHex(key))
+                console.log(bigconv.bufToHex(iv))
+
+                let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
+
+                let encrypted = cipher.update(JSON.stringify(decreto));
+                encrypted = Buffer.concat([encrypted, cipher.final()]);
+                encryptedData = encrypted.toString('hex')
+                console.log("encryptedData", encryptedData)
+
+
+
+                console.log("key", key)
+                console.log("iv", iv)
+
+
                 var body = {
                     type: '2',
                     src: 'Alcalde',
                     TTP: 'TTP',
                     dest: 'Concejales',
+                    msg: {
+                        decreto: encryptedData,
+                        keyDecreto: {
+                            key: bigconv.bigintToHex(publicKey.encrypt(bigconv.bufToBigint(key))),
+                            iv: bigconv.bigintToHex(publicKey.encrypt(bigconv.bufToBigint(iv)))
+                        }
+                    },
                     ts: ts.toUTCString()
                 }
+
+
+
+                // decreto_string = JSON.stringify(decreto)
+                // //decreto_string = "HOLA"
+                // decreto_bigint = bigconv.textToBigint(decreto_string)
+
+                // decreto_encrypt = publicKey.encrypt(decreto_bigint)
+                // decreto_decrypt = privateKey.decrypt(decreto_encrypt)
+
+
+                // console.log("string", decreto_string)
+                // console.log("bigint", decreto_bigint)
+                // console.log("stringAgain", bigconv.bigintToText(decreto_bigint))
+                // console.log("encrypt", decreto_encrypt)
+                // console.log("decrypt", decreto_decrypt)
+                // console.log("string2", bigconv.bigintToText(decreto_decrypt))
 
 
                 const digestType2 = await digestHash(body);
@@ -109,7 +179,7 @@ io.on('connection', (socket) => {
 
 
 
-                var clavesShamir = await inicioProceso(mensaje.body.msg)
+                var clavesShamir = await inicioProceso(mensaje.body.msg.key, privateKey)
 
                 mConcejal1 = {
                     d: clavesShamir[0],
@@ -130,7 +200,6 @@ io.on('connection', (socket) => {
 
 
                 usuarios.forEach((k, v) => {
-                    console.log(k)
                     if (v != "alcalde") {
                         switchType3(v, k, socket)
                     }
@@ -155,56 +224,33 @@ io.on('connection', (socket) => {
 
 
 
-async function inicioProceso(claveK) {
+async function inicioProceso(claveK, prK) {
 
-    console.log(claveK)
 
     var result = [];
 
-    const { publicKey, privateKey } = await rsa.generateRandomKeys(3072);
 
-    console.log("public", publicKey)
-    console.log("private", privateKey)
 
-    var DecretoPrivateKey = privateKey;
+    var DecretoPrivateKey = prK;
 
-    console.log(DPrK_d)
 
     var DPrK_d = bigconv.bigintToHex(DecretoPrivateKey.d)
-    console.log("hex", DPrK_d)
     var DPrK_n = bigconv.bigintToHex(DecretoPrivateKey.publicKey.n)
-    
+
 
     const secret_d = Buffer.from(DPrK_d)
-    console.log("buffer", secret_d)
     const secret_n = Buffer.from(DPrK_n)
 
     const share_d = sss.split(secret_d, { shares: 4, threshold: 2 });
-    console.log(share_d)
     const share_n = sss.split(secret_n, { shares: 4, threshold: 2 });
 
-    //Falta encriptar con la clave recibida por el Alcalde
 
-    // var test = bigconv.textToBuf("hola")
-
-    // console.log("bufferizado", test)
-
-    // console.log("hexadizado", bigconv.bufToHex(test))
-
-
-    // result.push(encrypt(bigconv.bufToHex(test), claveK))
-    // result.push(encrypt(bigconv.bufToHex(test), claveK))
-
-    // console.log("encriptado", result[0])
-
-        
 
     for (let i = 0; i < 4; i++) {
         result.push(encrypt(bigconv.bufToHex(share_d[i]), claveK))
         result.push(encrypt(bigconv.bufToHex(share_n[i]), claveK))
 
     }
-    console.log(bigconv.bufToHex(share_d[0]))
 
     return result;
 
@@ -346,7 +392,6 @@ async function switchType3(v, k, socket) {
                 cert: TTPcert
             }
             socket.broadcast.to(k).emit('ttp-to-concejal-type3', bodyToEmit1);
-            console.log("Deberia de haber enviado algo")
             break;
 
         case "concejal2":

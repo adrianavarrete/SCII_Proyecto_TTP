@@ -33,6 +33,7 @@ async function saveTTPCert() {
             e: bigconv.bigintToHex(ttp_pubKey.e),
             n: bigconv.bigintToHex(ttp_pubKey.n)
         },
+        ID: "TTP",
         IssuerID: "TTP",
     }
     
