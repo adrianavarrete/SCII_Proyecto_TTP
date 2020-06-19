@@ -69,6 +69,8 @@ io.on('connection', (socket) => {
 
     socket.on('alcalde-to-ttp-type1', async (mensaje) => {
 
+        console.log(mensaje)
+        
         var aytoCert = await getAytoCert()
         var alcaldeCert = mensaje.cert
 
@@ -115,20 +117,13 @@ io.on('connection', (socket) => {
                 const key = crypto.randomBytes(32)
                 const iv = crypto.randomBytes(16)
 
-                console.log(bigconv.bufToHex(key))
-                console.log(bigconv.bufToHex(iv))
-
                 let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
 
                 let encrypted = cipher.update(JSON.stringify(decreto));
                 encrypted = Buffer.concat([encrypted, cipher.final()]);
                 encryptedData = encrypted.toString('hex')
-                console.log("encryptedData", encryptedData)
 
 
-
-                console.log("key", key)
-                console.log("iv", iv)
 
 
                 var body = {
@@ -146,22 +141,6 @@ io.on('connection', (socket) => {
                     ts: ts.toUTCString()
                 }
 
-
-
-                // decreto_string = JSON.stringify(decreto)
-                // //decreto_string = "HOLA"
-                // decreto_bigint = bigconv.textToBigint(decreto_string)
-
-                // decreto_encrypt = publicKey.encrypt(decreto_bigint)
-                // decreto_decrypt = privateKey.decrypt(decreto_encrypt)
-
-
-                // console.log("string", decreto_string)
-                // console.log("bigint", decreto_bigint)
-                // console.log("stringAgain", bigconv.bigintToText(decreto_bigint))
-                // console.log("encrypt", decreto_encrypt)
-                // console.log("decrypt", decreto_decrypt)
-                // console.log("string2", bigconv.bigintToText(decreto_decrypt))
 
 
                 const digestType2 = await digestHash(body);
