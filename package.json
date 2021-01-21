@@ -21,6 +21,6 @@
     "request": "^2.88.2",
     "rsa-scii-upc": "^1.0.1",
     "shamirs-secret-sharing": "^1.0.1",
-    "socket.io": "^2.3.0"
+    "socket.io": "^2.4.0"
   }
 }
